@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 *.pdf
+*ipynb_checkpoints/
+//python skripts which are tested for ipython notebooks
+*.py
