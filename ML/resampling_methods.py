@@ -89,3 +89,67 @@ def cross_validation_split(dataset, folds=3):
     return k_folds
 
 iris_folds = cross_validation_split(iris_data, folds=4)
+
+print(iris_folds["fold1"]["train"].shape)
+print(iris_folds["fold1"]["train"].head())
+print(iris_folds["fold1"]["test"].shape)
+print(iris_folds["fold1"]["test"].head())
+
+
+print(iris_folds["fold2"]["train"].shape)
+print(iris_folds["fold2"]["train"].head())
+print(iris_folds["fold2"]["test"].shape)
+print(iris_folds["fold2"]["test"].head())
+
+
+## Learning Curves Task
+
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
+import numpy as np
+np.random.seed(42)
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+# number of instances
+m = 100
+# dataset
+X = 6 * np.random.rand(m, 1) - 3
+y = 0.5 * X**2 + X + 2 + np.random.randn(m, 1)
+# plot
+plt.figure()
+plt.scatter(np.sort(X), np.sort(y))
+
+
+def plot_learning_curve(model,X,y, test_sizes = [0.1, 0.2, 0.3, 0.4, 0.5]):
+    '''
+    Generating a plot of a learning curve
+        
+    Parameters
+    ----------
+    model : model which is used for training the dataset
+    X: dataset
+    y: labels     
+    '''
+    no_iter = len(test_sizes)
+    performance_measure =  [None] * no_iter
+    i = 0
+    for size in test_sizes:
+        # Create machine learning model
+        ml_model = model
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size= size, random_state=42)
+
+        # Train the model using the training sets
+        ml_model.fit(X_train, y_train)
+        
+        # Make predictions using the testing set
+        y_pred = ml_model.predict(X_test)
+        performance_measure[i] = mean_squared_error(y_test, y_pred)
+        i += 1
+    plt.scatter(x=test_sizes, y=performance_measure)
+    
+
+
+from sklearn.linear_model import LinearRegression
+ml_model = LinearRegression()
+plot_learning_curve(ml_model, X,y)
