@@ -109,7 +109,6 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 np.random.seed(42)
 import matplotlib.pyplot as plt
-%matplotlib inline
 
 # number of instances
 m = 100
@@ -121,7 +120,7 @@ plt.figure()
 plt.scatter(np.sort(X), np.sort(y))
 
 
-def plot_learning_curve(model,X,y, test_sizes = [0.1, 0.2, 0.3, 0.4, 0.5]):
+def plot_learning_curve(model,X,y, test_sizes = np.linspace(start=0.1, stop=0.6, num=50)):
     '''
     Generating a plot of a learning curve
         
@@ -146,10 +145,52 @@ def plot_learning_curve(model,X,y, test_sizes = [0.1, 0.2, 0.3, 0.4, 0.5]):
         y_pred = ml_model.predict(X_test)
         performance_measure[i] = mean_squared_error(y_test, y_pred)
         i += 1
-    plt.scatter(x=test_sizes, y=performance_measure)
+    plt.scatter(x=test_sizes, y=performance_measure, linestyle='-', marker='o')
+    plt.plot(test_sizes, performance_measure, color='blue', linewidth=1)
+    plt.show()
     
-
-
 from sklearn.linear_model import LinearRegression
 ml_model = LinearRegression()
 plot_learning_curve(ml_model, X,y)
+
+
+##Task 3 Regularisation, plot_model function:
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+np.random.seed(42)
+m = 100
+X = 6 * np.random.rand(m, 1)
+y = 1 + 0.5 * X + .85 * np.random.randn(m, 1)
+plt.figure()
+plt.scatter(X,y)
+
+from sklearn.linear_model import Ridge
+
+def plot_model(model_class, alphas, **model_kargs):
+    #Split data into train and test
+     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size= 0.4, random_state=42)
+     performance_measure = [None] * len(alphas)
+     i = 0
+     for alpha in alphas:
+        #define learner
+        ridge_regression = Ridge(alpha=alpha)
+        #fit learner
+        ridge_regression.fit(X_train, y_train)
+        #predict test data
+        y_pred = ridge_regression.predict(X_test)
+        performance_measure[i] = mean_squared_error(y_test, y_pred)
+        print("Ridge Regression, alpha: ", alpha)
+        print("Mean Squared Error: ", mean_squared_error(y_test, y_pred))
+        i += 1
+        # Plot outputs
+        plt.scatter(X_test, y_test,  color='black')
+        plt.plot(X_test, y_pred, color='blue', linewidth=1)
+        plt.show()
+        
+plot_model(Ridge, alphas=(0, 10, 100))
+
+from sklearn.linear_model import Lasso
+plot_model(Lasso, alphas=(0, 0.1, 1))
