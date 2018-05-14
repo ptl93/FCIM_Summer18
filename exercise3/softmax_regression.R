@@ -35,9 +35,12 @@ softmax_regression = R6Class("softmax_regression",
       #' @return The softmax_regression object with initialized values
 
       #Concatenate intercept if not existent
-      for (col in ncol(X)) {
-        if (all(X[, col] == rep(1,nrow(X)))) X$intercept = 1
+      bias_flag = TRUE
+      for (col in seq.int(ncol(X))) {
+        if (all(X[, col] == rep(1,nrow(X)))) bias_flag = FALSE
       }
+      if (bias_flag) X = cbind(X, 1)
+      #Fill in initial attributes
       self$X = X
       self$y = y
       self$n = nrow(X)
@@ -79,7 +82,7 @@ softmax_regression = R6Class("softmax_regression",
     #' @param theta weights / coefficients to learn
     #' @return Posterior probabilites for each class g, hence output matrix (n,g)
     calc_posterior_prob = function(X, theta) {
-      posterior_probs = self$weighted_sum(X, theta)
+      posterior_probs = self$softmax_trafo(self$weighted_sum(X, theta))
       return(posterior_probs)
     },
     
@@ -106,6 +109,7 @@ softmax_regression = R6Class("softmax_regression",
     #' @return scalar value for objective (negative sum loglikelihood)
     #' 
     get_objective = function(X, y, theta) {
+      #calc class posteriors for each observation
       probs_mat = self$calc_posterior_prob(X, theta)
       #get element per row of true class
       prob_vals = vector("numeric", length = nrow(probs_mat))
@@ -123,6 +127,7 @@ softmax_regression = R6Class("softmax_regression",
     # computes gradient of objective (neg lok lik)
     # as theta is a matrix also returns a matrix of same dim
     gradient = function(X, theta, onehot) {
+      #calc posterior class prob for each observations (n,g)
       probs = self$calc_posterior_prob(X, theta)
       diff = onehot - probs  # (n,g)
       grad = matrix(0, nrow = nrow(theta), ncol = ncol(theta))
@@ -157,8 +162,18 @@ softmax_regression = R6Class("softmax_regression",
         print(paste0("Gradient Iteration: ", iter))
         print(paste0("Objective Value: ", self$objective))
       }
-      #self$theta = self$theta - self$theta[, self$g]
+      self$theta = self$theta - self$theta[, self$g]
       return(list(theta = self$theta, objective = self$objective))
+    },
+    
+    #' Gets column idx for maximal value in one row
+    #' @param probs_mat (n,g) matrix containins class-probs for each observations
+    #' @return numeric vector containins column idx (class)
+    get_class_idx = function(probs_mat) {
+     classes = apply(probs_mat, MARGIN = 1, function(row) {
+       which.max(row)
+     })
+     return(classes)
     },
     
     #' Predicts softmax regression on (new) data
@@ -168,24 +183,31 @@ softmax_regression = R6Class("softmax_regression",
     # computes gradient of objective (neg log lik)
     # as theta is a matrix also returns a matrix of same dim
     predict = function(X, y = NULL) {
+      bias_flag = TRUE
+      for (col in seq.int(ncol(X))) {
+        if (all(X[, col] == rep(1,nrow(X)))) bias_flag = FALSE
+      }
+      if (bias_flag) X = cbind(X, 1)
+      #calc posteriorior class probabilities
       probs = self$calc_posterior_prob(X, self$theta)
-      classes = getMaxIndexOfRows(probs)
-      err = NULL
+      #get classes by "majority"/"maximal" rule
+      classes = self$get_class_idx(probs)
+      #compute test error if y is passed
+      mmce = NULL
       if (!is.null(y))
-        err = mean(y != classes)
-      return(list(classes = classes, probs = probs, err = err))
+        mmce = mean(y != classes)
+      return(list(classes = classes, probs = probs, mmce = mmce))
     }
   )
 )
 
 ## Conduct Softmax regression
 
-df = iris
-X = df[, -5]
-y = as.integer(df[, 5])
+X = iris[, -5]
+y = as.integer(iris[, 5])
 
 set.seed(12)
-ind = sample(nrow(df))
+ind = sample(nrow(iris))
 train_idx =  ind[1:100]
 test_idx =  ind[101:150]
 X_train = as.matrix(X[train_idx, ])
@@ -195,8 +217,29 @@ X_test = as.matrix(X[test_idx, ])
 y_test = y[test_idx]
 
 ## Create softmax instance
-softmax = softmax_regression$new(X_train, y_train)
+softmax = softmax_regression$new(X_train, y_train, max_iter = 300L)
 print(softmax)
-softmax$train()
+head(softmax$X)
+softmax$theta
 
+softmax$train()
 test_pred = softmax$predict(X_test, y_test)
+print(test_pred)
+#...
+#$mmce
+#[1] 0.04
+
+### Compare to mlr:
+library(mlr)
+set.seed(123)
+iris.task
+lrn = makeLearner("classif.multinom")
+holdout(learner = lrn, task = iris.task, split = 2/3, measures = mmce)
+
+### Apply Softmax Regression with same data in own version
+my_iris_task = makeClassifTask(id = "iris", data = iris, target = "Species")
+mod = train(lrn, my_iris_task, subset = train_idx)
+test_preds = predict(mod, my_iris_task, subset = test_idx)
+performance(test_preds)
+#mmce 
+#0.02
