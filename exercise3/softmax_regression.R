@@ -25,13 +25,13 @@ softmax_regression = R6Class("softmax_regression",
     optimizer = NULL,
     max_iter = NULL,
     objective = NULL,
+    add_intercept = NULL,
     ### Constructor ###
-    initialize = function(X, y, optimizer = "gd", eta = 0.05, max_iter = 200L) {
+    initialize = function(X, y, add_intercept = TRUE) {
       #' Initializes Softmax Regression Object
       #' @param X n x p matrix. n obs, p features. [if 1-vector is not included it will be added]
       #' @param y target vector of classification problem
-      #' @param optimizer optimization algorithm. Either gradientdescent (gd) or  stochastic gd (sdg)
-      #' @param eta learning rate (stepsize) for optimization algorithm 
+      #' @param add_intercept logical whether to add an intercept or not
       #' @return The softmax_regression object with initialized values
 
       #Concatenate intercept if not existent
@@ -39,7 +39,7 @@ softmax_regression = R6Class("softmax_regression",
       for (col in seq.int(ncol(X))) {
         if (all(X[, col] == rep(1,nrow(X)))) bias_flag = FALSE
       }
-      if (bias_flag) X = cbind(X, 1)
+      if (bias_flag && add_intercept) X = cbind(X, 1)
       #Fill in initial attributes
       self$X = X
       self$y = y
@@ -48,10 +48,6 @@ softmax_regression = R6Class("softmax_regression",
       self$g = length(unique(y))
       #Initialize theta class matrix randomly. Output: (p,g) matrix
       self$theta = matrix(runif(n = self$p*self$g, min = -1, max = 1), nrow = self$p, ncol = self$g)
-      self$eta = eta
-      self$optimizer = optimizer
-      self$max_iter = max_iter
-      self$objective = 10000
     },
     ### METHODS ###
     
@@ -91,7 +87,7 @@ softmax_regression = R6Class("softmax_regression",
     #' @return Posterior probabilites for each class g, hence output matrix (n,g)
     get_batches = function(batch_size) {
       inds = sample(seq_len(self$n))
-      return(split(inds, ceiling(seq_along(inds) / batch.size)))
+      return(split(inds, ceiling(seq_along(inds) / batch_size)))
     },
     
     #' Creates one-hot encoding for target vector y.
@@ -142,28 +138,44 @@ softmax_regression = R6Class("softmax_regression",
     },
     
     #' Trains the softmax regression problem using gradient descent
-    #' @param X Input matrix (features)
-    #' @param y Target vector 
-    #' @param theta class coefficient matrix 
+    #' @param optimizer optimization algorithm. Either gradientdescent (gd) or  stochastic gd (sdg)
+    #' @param eta learning rate (stepsize) for optimization algorithm 
+    #' @param max_iter maximal number of iteration
+    #' @param batch_size batch_size for stochastic gradient descent
     #' @return List with optimal theta coefficients for each class and objective value
     # computes gradient of objective (neg log lik)
     # as theta is a matrix also returns a matrix of same dim
-    train = function() {
-      #get one hot encoded matrix
-      onehot = self$one_hot_encoding(self$y)
-      #iterate over training sample
-      for (iter in seq.int(self$max_iter)) {
-        #compute gradient for all samples in train data
-        grad = self$gradient(self$X, self$theta, onehot)
-        #apply gradient update
-        self$theta = self$theta - (self$eta) * grad 
-        #compute objective value with updated theta weights
-        self$objective = self$get_objective(self$X, self$y, self$theta)
-        print(paste0("Gradient Iteration: ", iter))
-        print(paste0("Objective Value: ", self$objective))
+    train = function(optimizer = "gd", eta = 0.05, max_iter = 200L, batch_size = 10) {
+      self$eta = eta
+      self$optimizer = optimizer
+      self$max_iter = max_iter
+      self$objective = 10000
+      #normal gradient descent
+      if (self$optimizer == "gd") {
+        #get one hot encoded matrix
+        onehot = self$one_hot_encoding(self$y)
+        #iterate over training sample
+        for (iter in seq.int(self$max_iter)) {
+          #compute gradient for all samples in train data
+          grad = self$gradient(self$X, self$theta, onehot)
+          #apply gradient update
+          self$theta = self$theta - (self$eta) * grad 
+          #compute objective value with updated theta weights
+          self$objective = self$get_objective(self$X, self$y, self$theta)
+          print(paste0("Gradient Iteration: ", iter))
+          print(paste0("Objective Value: ", self$objective))
+          self$theta = self$theta - self$theta[, self$g]
+        }
+        return(list(theta = self$theta, objective = self$objective))
+      } else if (self$optimizer == "sgd") {
+        for (e in seq_len(self$max_iter)) { # Start at epoch 1
+          batches = self$get_batches(batch_size = batch_size)
+          for (batch in batches) { # Iterate over Batches
+          }
+        }
+      } else {
+        stop("Either choose gd or sgd!")
       }
-      self$theta = self$theta - self$theta[, self$g]
-      return(list(theta = self$theta, objective = self$objective))
     },
     
     #' Gets column idx for maximal value in one row
@@ -217,12 +229,12 @@ X_test = as.matrix(X[test_idx, ])
 y_test = y[test_idx]
 
 ## Create softmax instance
-softmax = softmax_regression$new(X_train, y_train, max_iter = 300L)
+softmax = softmax_regression$new(X_train, y_train)
 print(softmax)
 head(softmax$X)
 softmax$theta
 
-softmax$train()
+softmax$train(eta = 0.05, max_iter = 200L)
 test_pred = softmax$predict(X_test, y_test)
 print(test_pred)
 #...
