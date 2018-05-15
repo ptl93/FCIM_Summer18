@@ -26,6 +26,7 @@ softmax_regression = R6Class("softmax_regression",
     max_iter = NULL,
     objective = NULL,
     add_intercept = NULL,
+    loss_history = NULL,
     ### Constructor ###
     initialize = function(X, y, add_intercept = TRUE) {
       #' Initializes Softmax Regression Object
@@ -51,10 +52,11 @@ softmax_regression = R6Class("softmax_regression",
     },
     ### METHODS ###
     
-    #' Computes g softmax values for vector z 
+    #' Computes g softmax values for vector z. Add stabilization by subtracting maximum value of vec
     #' @param z g dimensional vector
     #' @return softmax values-vector
     softmax_vec = function(z) {
+      z = z - max(z)
       return(exp(z) / sum(exp(z)))
     },
     
@@ -94,8 +96,11 @@ softmax_regression = R6Class("softmax_regression",
     #' @param y target vector y. Either numeric or with "real factors"
     #' @return  (n,g) binary 0/1 matrix, each row as exactly one "1" entry
     one_hot_encoding = function(y) {
-      d = data.frame(y = factor(as.integer(y), levels = 1:length(unique(y))))
-      return(model.matrix(~y-1, data = d))
+      hot_encoded_mat = matrix(0, nrow = self$n, ncol = self$g)
+      for (i in seq.int(length(y))) {
+        hot_encoded_mat[i, y[i]] = 1
+      }
+      return(hot_encoded_mat)
     },
     
     #' Computes objective value for softmax regression [negative loglikelihood as derived]
@@ -126,11 +131,12 @@ softmax_regression = R6Class("softmax_regression",
       #calc posterior class prob for each observations (n,g)
       probs = self$calc_posterior_prob(X, theta)
       diff = onehot - probs  # (n,g)
+      #initialized empty gradient which will be computed iteratively in for loop 1:n
       grad = matrix(0, nrow = nrow(theta), ncol = ncol(theta))
       # (p,g)
       
-      for (i in 1:nrow(X)) { # iterate over all obs
-        xj = X[i,]  #(1,g)
+      for (i in seq.int(nrow(X))) { # iterate over all obs
+        xj = X[i,]  #(1,p)
         gradient = -tcrossprod(diff[i,], xj)  # (1,g) and (p,1) outter product g*p
         grad = grad + t(gradient)
       }
@@ -142,7 +148,7 @@ softmax_regression = R6Class("softmax_regression",
     #' @param eta learning rate (stepsize) for optimization algorithm 
     #' @param max_iter maximal number of iteration
     #' @param batch_size batch_size for stochastic gradient descent
-    #' @return List with optimal theta coefficients for each class and objective value
+    #' @return List with optimal theta coefficients for each class and final objective value. In addition also loss_history
     # computes gradient of objective (neg log lik)
     # as theta is a matrix also returns a matrix of same dim
     train = function(optimizer = "gd", eta = 0.05, max_iter = 200L, batch_size = 10) {
@@ -150,6 +156,7 @@ softmax_regression = R6Class("softmax_regression",
       self$optimizer = optimizer
       self$max_iter = max_iter
       self$objective = 10000
+      self$loss_history = vector("numeric", length = max_iter)
       #normal gradient descent
       if (self$optimizer == "gd") {
         #get one hot encoded matrix
@@ -162,11 +169,12 @@ softmax_regression = R6Class("softmax_regression",
           self$theta = self$theta - (self$eta) * grad 
           #compute objective value with updated theta weights
           self$objective = self$get_objective(self$X, self$y, self$theta)
+          self$loss_history[iter] = self$objective
           print(paste0("Gradient Iteration: ", iter))
           print(paste0("Objective Value: ", self$objective))
           self$theta = self$theta - self$theta[, self$g]
         }
-        return(list(theta = self$theta, objective = self$objective))
+        return(list(theta = self$theta, objective = self$objective, loss_history = self$loss_history))
       } else if (self$optimizer == "sgd") {
         for (e in seq_len(self$max_iter)) { # Start at epoch 1
           batches = self$get_batches(batch_size = batch_size)
@@ -234,7 +242,7 @@ print(softmax)
 head(softmax$X)
 softmax$theta
 
-softmax$train(eta = 0.05, max_iter = 200L)
+softmax$train(eta = 0.05, max_iter = 400L)
 test_pred = softmax$predict(X_test, y_test)
 print(test_pred)
 #...
@@ -251,6 +259,9 @@ holdout(learner = lrn, task = iris.task, split = 2/3, measures = mmce)
 ### Apply Softmax Regression with same data in own version
 my_iris_task = makeClassifTask(id = "iris", data = iris, target = "Species")
 mod = train(lrn, my_iris_task, subset = train_idx)
+estimated_weights = coef(mod$learner.model)
+print(estimated_weights)
+print(t(softmax$theta))
 test_preds = predict(mod, my_iris_task, subset = test_idx)
 performance(test_preds)
 #mmce 
