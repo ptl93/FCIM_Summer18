@@ -67,8 +67,6 @@ Adaboost = R6Class("Adaboost",
           #compute beta baselearner weights
           self$beta_weights[[iter]] = 0.5*log((1 - self$error[[iter]])/self$error[[iter]])
           #update weights
-          w = w * exp(alpha[i] * missc)
-          w = w / sum(w)
         }
       }
     },
