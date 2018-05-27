@@ -20,6 +20,8 @@ Adaboost = R6Class("Adaboost",
     beta_weights = NULL,
     base_preds = NULL,
     error = NULL,
+    max_iter = NULL,
+    add_intercept = FALSE,
     ### CONSTRUCTOR ###
     #' Initializes Adaboost object
     #' @param data data.frame
@@ -28,7 +30,10 @@ Adaboost = R6Class("Adaboost",
     #' @param formula formula for baselearner. Default is null. If null is inserted full model target ~ . will be taken
     #' @return Adaboost object
     initialize = function(data, target, add_intercept = FALSE, formula = NULL) {
-      if (add_intercept) data = cbind(intercept = 1, data)
+      if (add_intercept) {
+        data = cbind(intercept = 1, data)
+        self$add_intercept = TRUE
+      } 
       self$X = data[, -which(names(data) == target)]
       self$y = data[[target]]
       if (length(levels(self$y)) > 2) stop("Target variable is not binary but multiclass")
@@ -51,39 +56,43 @@ Adaboost = R6Class("Adaboost",
     train = function(baselearner = "treestrump", max_iter = 30L, ...) {
       self$base_models = vector("list", length = max_iter)
       self$base_preds = vector("list", length = max_iter)
-      self$beta_weights = vector("list", length = max_iter)
+      self$beta_weights = numeric(length = max_iter)
       self$error = vector("list", length = max_iter)
-      self$weights = vector("list", length = max_iter)
+      #self$weights = vector("list", length = max_iter)
       library(rpart)
       #Equal weight init for each observation in trainig dataset
-      self$weights[[1]] = rep(x = 1/self$n, times = self$n)
+      self$weights = rep(x = 1/self$n, times = self$n)
       #Adaboost training loop
       for (iter in seq.int(max_iter)) {
         #Fit baselearner clasifier for training data with weights w_iter and get bHat_iter
         if (baselearner == "treestump") {
-          print(iter)
           #train tree stump
-          ###Error in eval(extras, data, env) : object 'iter' not found ## In weights rpart call)
-          self$base_models[[iter]] = rpart(formula = self$formula, data = self$data, weights = self$weights[[iter]], 
+          self$base_models[[iter]] = rpart(formula = self$formula, data = self$data, weights =  self$weights, 
             control = rpart.control(maxdepth = 1))
-          self$base_preds[[iter]] = as.vector(predict(self$base_models[[iter]], self$data))
+          #http://stat.ethz.ch/R-manual/R-devel/library/rpart/html/predict.rpart.html , somehow "class" is not working
+          self$base_preds[[iter]] = predict(object = self$base_models[[iter]], newdata = self$data, type = "vector")
+          #print(paste("Iteration no. ", iter))
+          #print(paste("Misclassification rate", sum(self$get_missclassified_idx(y = self$base_models[[iter]]$y, y_hat = self$base_preds[[iter]]))/self$n))
           #compute weighted error
-          self$error[[iter]] = self$get_error(y = self$base_models[[iter]]$y, y_hat = self$base_preds[[iter]], weights = self$weights[[iter]])
+          self$error[[iter]] = self$get_error(y = self$base_models[[iter]]$y, y_hat = self$base_preds[[iter]], weights = self$weights)
           #compute beta baselearner weights
-          self$beta_weights[[iter]] = 0.5*log((1 - self$error[[iter]])/self$error[[iter]])
+          self$beta_weights[iter] = 0.5*log((1 - self$error[[iter]])/self$error[[iter]])
           #update weights
-          self$weights[[iter + 1]] = self$weights[[iter]]*exp(self$beta_weights[[iter]]*self$get_missclassified_idx(y = self$base_models[[iter]]$y,
+          self$weights = self$weights*exp(self$beta_weights[[iter]]*self$get_missclassified_idx(y = self$base_models[[iter]]$y,
             y_hat = self$base_preds[[iter]]))
         }
       }
-      return(NULL)
+      #save max_iter in object for prediction
+      self$max_iter = max_iter
+      return(invisible(NULL))
     },
     #' Get missclassified observation indexs
     #' @param y_hat predicted class from base learner
     #' @param y  true class label
-    #' @return weighed_error
+    #' @return indikator for missclassified observations
     get_missclassified_idx = function(y, y_hat) {
       indik_wrong = (y != y_hat)
+      return(indik_wrong)
     },
     #' Computes weighted error
     #' @param y_hat predicted class from base learner
@@ -94,17 +103,78 @@ Adaboost = R6Class("Adaboost",
       weighted_error = sum(weights*indik_wrong) / sum(weights)
       return(weighted_error)
     },
+    #' Predicts Adabost classifier on (new) data
+    #' @param newdata newdata
+    #' @return predicted class
     predict = function(newdata) {
-  
+      if (self$add_intercept) newdata = cbind(intercept = 1, newdata)
+      #init prediction matrix for n observations and M base learners
+      preds_mat = matrix(nrow = nrow(newdata), ncol = self$max_iter)
+      for (model in seq.int(self$max_iter)) {
+        preds_mat[, model] = predict(self$base_models[[model]], newdata, type = "vector") #returns label 1,2
+      }
+      #recode class to -1 and 1 for sign function. 1 to -1 and 2 to 1
+      #print("Foo")
+      #print(head(preds_mat))
+      preds_mat = ifelse(preds_mat == 1, -1, 1)
+      #print("Should be converted")
+      #print(head(preds_mat))
+      ##for each row observation now compute weigted average from base learners
+      for (obs in seq.int(nrow(newdata))) {
+        preds_mat[obs, ] = preds_mat[obs, ] * self$beta_weights
+      }
+      #print(head(preds_mat))
+      ##compute sign of weighted average and take sign function
+      preds = sign(rowSums(preds_mat))
+      #print(preds)
+      ##to compare to true value recode back to 1 and 2
+      preds = ifelse(preds == -1, 1, 2)
+      #print(preds)
+      #compute mean missclassification rate
+      mmce = sum((preds == as.numeric(self$y)))/nrow(newdata)
+      list(preds = preds, mmce = mmce)
     }
   )
 )
 
 
 data(BreastCancer, package = "mlbench")
-data = BreastCancer
 library(dplyr)
+myAdaboost = Adaboost$new(data = BreastCancer, target = "Class", add_intercept = TRUE)
+myAdaboost$train(baselearner = "treestump", max_iter = 50L)
+myAdaboost$beta_weights
+preds = myAdaboost$predict(BreastCancer)
+preds$mmce
+#[1] 1
+(nrow(BreastCancer))
+#699, overfitting. Also maybe because of max_iteration 50
 
-myAdaboost = Adaboost$new(data = data, target = "Class", add_intercept = FALSE)
-myAdaboost$train(baselearner = "treestump", max_iter = 20L)
-models = myAdaboost$base_models
+data(Ionosphere, package = "mlbench")
+myAdaboost2 = Adaboost$new(data = Ionosphere, target = "Class", add_intercept = TRUE)
+myAdaboost2$train(baselearner = "treestump", max_iter = 50L)
+myAdaboost2$beta_weights
+preds2 = myAdaboost2$predict(Ionosphere)
+preds2$mmce
+#[1] 0.9458689
+(nrow(Ionosphere))
+#[1] 351
+
+data(Sonar, package = "mlbench")
+myAdaboost3 = Adaboost$new(data = Sonar, target = "Class", add_intercept = TRUE)
+myAdaboost3$train(baselearner = "treestump", max_iter = 50L)
+myAdaboost3$beta_weights
+preds3 = myAdaboost3$predict(Sonar)
+preds3$mmce
+#[1] 0.9855769
+(nrow(Sonar))
+#[1] 208
+
+data(PimaIndiansDiabetes, package = "mlbench")
+myAdaboost4 = Adaboost$new(data = PimaIndiansDiabetes, target = "diabetes", add_intercept = TRUE)
+myAdaboost4$train(baselearner = "treestump", max_iter = 50L)
+myAdaboost4$beta_weights
+preds4 = myAdaboost4$predict(PimaIndiansDiabetes)
+preds4$mmce
+#[1] 0.7877604
+(nrow(PimaIndiansDiabetes))
+#[1] 768
