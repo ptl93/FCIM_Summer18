@@ -17,6 +17,9 @@ Adaboost = R6Class("Adaboost",
     classes = NULL,
     base_models = NULL,
     formula = NULL,
+    beta_weights = NULL,
+    base_preds = NULL,
+    error = NULL,
     ### CONSTRUCTOR ###
     #' Initializes Adaboost object
     #' @param data data.frame
@@ -24,7 +27,7 @@ Adaboost = R6Class("Adaboost",
     #' @param add_intercept logical, whether intercept should be added. Default is FALSE
     #' @param formula formula for baselearner. Default is null. If null is inserted full model target ~ . will be taken
     #' @return Adaboost object
-    initialize = function(data = NULL, target, add_intercept = FALSE, formula = NULL) {
+    initialize = function(data, target, add_intercept = FALSE, formula = NULL) {
       if (add_intercept) data = cbind(intercept = 1, data)
       self$X = data[, -which(names(data) == target)]
       self$y = data[[target]]
@@ -34,7 +37,6 @@ Adaboost = R6Class("Adaboost",
       self$p = ncol(data) - 1
       self$data = data
       self$classes = unique(self$y)
-      self$base_models = list()
       if (is.null(formula)) {
         self$formula = as.formula(paste(target, " ~ ."))
       } else {
@@ -47,28 +49,50 @@ Adaboost = R6Class("Adaboost",
     #' @param max_iter maximal iteration for Adaboost
     #' @param ... additional parameters passed to baselearner algorithm
     train = function(baselearner = "treestrump", max_iter = 30L, ...) {
-      self$beta_weights = numeric(length = max_iter)
-      self$weights = list()
+      self$base_models = vector("list", length = max_iter)
+      self$base_preds = vector("list", length = max_iter)
+      self$beta_weights = vector("list", length = max_iter)
+      self$error = vector("list", length = max_iter)
+      self$weights = vector("list", length = max_iter)
       library(rpart)
       #Equal weight init for each observation in trainig dataset
-      self$weights = rep(x = 1/self$n, times = self$n)
+      self$weights[[1]] = rep(x = 1/self$n, times = self$n)
       #Adaboost training loop
       for (iter in seq.int(max_iter)) {
         #Fit baselearner clasifier for training data with weights w_iter and get bHat_iter
         if (baselearner == "treestump") {
+          print(iter)
           #train tree stump
-          self$base_models[[iter]] = rpart(formula = self$formula, data = self$data, weights = self$weights, 
+          ###Error in eval(extras, data, env) : object 'iter' not found ## In weights rpart call)
+          self$base_models[[iter]] = rpart(formula = self$formula, data = self$data, weights = self$weights[[iter]], 
             control = rpart.control(maxdepth = 1))
-          self$base_preds[[iter]] = predict(self$base_models[[iter]], self$data, "class")
-          #get indicator for missclassified observations
-          indik_wrong = (self$base_preds[[iter]] != self$base_models[[iter]]$y)
-          #compute weighted error for each observation
-          self$error[[iter]] = sum(self$weights*indik_wrong) / sum(self$weights)
+          self$base_preds[[iter]] = as.vector(predict(self$base_models[[iter]], self$data))
+          #compute weighted error
+          self$error[[iter]] = self$get_error(y = self$base_models[[iter]]$y, y_hat = self$base_preds[[iter]], weights = self$weights[[iter]])
           #compute beta baselearner weights
           self$beta_weights[[iter]] = 0.5*log((1 - self$error[[iter]])/self$error[[iter]])
           #update weights
+          self$weights[[iter + 1]] = self$weights[[iter]]*exp(self$beta_weights[[iter]]*self$get_missclassified_idx(y = self$base_models[[iter]]$y,
+            y_hat = self$base_preds[[iter]]))
         }
       }
+      return(NULL)
+    },
+    #' Get missclassified observation indexs
+    #' @param y_hat predicted class from base learner
+    #' @param y  true class label
+    #' @return weighed_error
+    get_missclassified_idx = function(y, y_hat) {
+      indik_wrong = (y != y_hat)
+    },
+    #' Computes weighted error
+    #' @param y_hat predicted class from base learner
+    #' @param y  true class label
+    #' @return weighed_error
+    get_error = function(y, y_hat, weights) {
+      indik_wrong = self$get_missclassified_idx(y, y_hat)
+      weighted_error = sum(weights*indik_wrong) / sum(weights)
+      return(weighted_error)
     },
     predict = function(newdata) {
   
@@ -80,5 +104,7 @@ Adaboost = R6Class("Adaboost",
 data(BreastCancer, package = "mlbench")
 data = BreastCancer
 library(dplyr)
-self = list()
-myAdaboost = Adaboost$new(X, y, add_intercept = TRUE)
+
+myAdaboost = Adaboost$new(data = data, target = "Class", add_intercept = FALSE)
+myAdaboost$train(baselearner = "treestump", max_iter = 20L)
+models = myAdaboost$base_models
