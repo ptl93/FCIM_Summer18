@@ -140,16 +140,28 @@ Adaboost = R6Class("Adaboost",
 
 data(BreastCancer, package = "mlbench")
 library(dplyr)
-myAdaboost = Adaboost$new(data = BreastCancer, target = "Class", add_intercept = TRUE)
+myAdaboost = Adaboost$new(data = BreastCancer[,-1], target = "Class", add_intercept = TRUE)
 myAdaboost$train(baselearner = "treestump", max_iter = 50L)
 myAdaboost$beta_weights
 preds = myAdaboost$predict(BreastCancer)
 preds$mmce
-#[1] 1
+#[1] 0.9685265
 (nrow(BreastCancer))
 #699, overfitting. Also maybe because of max_iteration 50
 
+##compare with ada function from ada package
+library(ada)
+#BreastCancer = cbind(intercept = 1, BreastCancer)
+?ada
+X_BreastCancer = BreastCancer %>% select(-Class, -Id)
+X_BreastCancer = as.matrix(cbind(intercept = 1, X_BreastCancer))
+y_BreastCancer = as.numeric(unlist(as.vector(BreastCancer %>% select(Class))))
+ada_compared1 = ada(x = X_BreastCancer, y = y_BreastCancer, iter = 50L)
+print(ada_compared1) 
+#Train Error: 0.011 , better than own version
+
 data(Ionosphere, package = "mlbench")
+
 myAdaboost2 = Adaboost$new(data = Ionosphere, target = "Class", add_intercept = TRUE)
 myAdaboost2$train(baselearner = "treestump", max_iter = 50L)
 myAdaboost2$beta_weights
@@ -158,6 +170,13 @@ preds2$mmce
 #[1] 0.9458689
 (nrow(Ionosphere))
 #[1] 351
+
+X_Ionosphere = Ionosphere %>% select(-Class)
+X_Ionosphere = as.matrix(cbind(intercept = 1, X_Ionosphere))
+y_Ionosphere = as.numeric(unlist(as.vector(Ionosphere %>% select(Class))))
+ada_compared2 = ada(x = X_Ionosphere, y = y_Ionosphere, iter = 50L)
+print(ada_compared2)
+#Train Error: 0.017, better than own version
 
 data(Sonar, package = "mlbench")
 myAdaboost3 = Adaboost$new(data = Sonar, target = "Class", add_intercept = TRUE)
@@ -169,6 +188,14 @@ preds3$mmce
 (nrow(Sonar))
 #[1] 208
 
+X_Sonar = Sonar %>% select(-Class)
+X_Sonar = as.matrix(cbind(intercept = 1, X_Sonar))
+y_Sonar = as.numeric(unlist(as.vector(Sonar %>% select(Class))))
+ada_compared3 = ada(x = X_Sonar, y = y_Sonar, iter = 50L)
+print(ada_compared3)
+#Train Error: 0.005 , better than own version
+
+
 data(PimaIndiansDiabetes, package = "mlbench")
 myAdaboost4 = Adaboost$new(data = PimaIndiansDiabetes, target = "diabetes", add_intercept = TRUE)
 myAdaboost4$train(baselearner = "treestump", max_iter = 50L)
@@ -178,3 +205,11 @@ preds4$mmce
 #[1] 0.7877604
 (nrow(PimaIndiansDiabetes))
 #[1] 768
+
+X_PimaIndiansDiabetes = PimaIndiansDiabetes %>% select(-diabetes)
+X_PimaIndiansDiabetes = as.matrix(cbind(intercept = 1, X_PimaIndiansDiabetes))
+y_PimaIndiansDiabetes = as.numeric(unlist(as.vector(PimaIndiansDiabetes %>% select(diabetes))))
+ada_compared4 = ada(x = X_PimaIndiansDiabetes, y = y_PimaIndiansDiabetes, iter = 50L)
+print(ada_compared4)
+#Train Error: 0.098 
+## performs pretty much better than own version
