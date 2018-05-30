@@ -49,6 +49,12 @@ rpart.plot(tree_only_waistcirc)
 tree_only_anthro3c = snip.rpart(reg_tree_model, toss = c(1,3))
 rpart.plot(tree_only_anthro3c)
 
+
+### use mlr plotlearnerpred
+plotLearnerPrediction(regr_tree_learner, bodyfat_task, features = "waistcirc")
+plotLearnerPrediction(regr_tree_learner, bodyfat_task, features = "anthro3c")
+plotLearnerPrediction(regr_tree_learner, bodyfat_task, features = c("waistcirc", "anthro3c"))
+
 ### d) 10-fold-cv and calc mean_se and median_ae
 rdesc = makeResampleDesc("CV", iters = 10)
 print(rdesc)
