@@ -67,8 +67,10 @@ qda = R6Class("quadraticDiscriminantAnalysis",
       }
       probs = matrix(nrow = nrow(newdata), ncol = length(self$classes))
       colnames(probs) = self$classes
+      idx = which(colnames(newdata) == self$target)
+      newdata = newdata[,-idx]
       for (cl in self$classes) {
-        probs[, cl] = dmvnorm(x = newdata, mean = self$mu.j[[cl]], sigma = self$sigma.j[[cl]]) * self$pi.j[[cl]]
+        probs[, cl] = dmvnorm(x = newdata[, -5], mean = self$mu.j[[cl]], sigma = self$sigma.j[[cl]]) * self$pi.j[[cl]]
       }
       self$predicted.probs = t(apply(probs, 1, function(y) y / sum(y)))
       y = self$classes[max.col(probs)]
@@ -100,7 +102,7 @@ print(myQDA)
 #predict 
 myQDA$predictQDA(newdata = test)
 print(myQDA)
-
+myQDA$predicted.probs
 ##compare
 resClass = data.frame(massQDA = predictedClass, myQDA = myQDA$predicted.class)
 resClass

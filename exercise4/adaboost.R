@@ -80,6 +80,9 @@ Adaboost = R6Class("Adaboost",
           #update weights
           self$weights = self$weights*exp(self$beta_weights[[iter]]*self$get_missclassified_idx(y = self$base_models[[iter]]$y,
             y_hat = self$base_preds[[iter]]))
+          
+          #normalize weights
+          self$weights = self$weights / sum(self$weights)
         }
       }
       #save max_iter in object for prediction
