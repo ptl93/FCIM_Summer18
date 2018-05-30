@@ -111,11 +111,18 @@ Adaboost = R6Class("Adaboost",
     #' @return predicted class
     predict = function(newdata) {
       if (self$add_intercept) newdata = cbind(intercept = 1, newdata)
+      
       #init prediction matrix for n observations and M base learners
-      preds_mat = matrix(nrow = nrow(newdata), ncol = self$max_iter)
-      for (model in seq.int(self$max_iter)) {
-        preds_mat[, model] = predict(self$base_models[[model]], newdata, type = "vector") #returns label 1,2
-      }
+      #preds_mat = matrix(nrow = nrow(newdata), ncol = self$max_iter)
+      #for (model in seq.int(self$max_iter)) {
+      #  preds_mat[, model] = predict(self$base_models[[model]], newdata, type = "vector") #returns label 1,2
+      #}
+      
+      ## use vapply instead of for loop for preds_mat:
+      preds_mat = vapply(self$base_models, predict, newdata = newdata, type = "vector",
+                         FUN.VALUE = numeric(nrow(newdata)))
+      ##
+      
       #recode class to -1 and 1 for sign function. 1 to -1 and 2 to 1
       #print("Foo")
       #print(head(preds_mat))
@@ -126,6 +133,8 @@ Adaboost = R6Class("Adaboost",
       for (obs in seq.int(nrow(newdata))) {
         preds_mat[obs, ] = preds_mat[obs, ] * self$beta_weights
       }
+      ## do more efficient with matrix multiplication:
+      preds_mat = preds_mat %*% diag(self$beta_weights)
       #print(head(preds_mat))
       ##compute sign of weighted average and take sign function
       preds = sign(rowSums(preds_mat))
