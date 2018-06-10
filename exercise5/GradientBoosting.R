@@ -58,15 +58,15 @@ GradientBoosting = R6Class("GradientBoosting",
     #' @return NULL
     train = function(baselearner = "treestump", M = 30L, ...) {
       #init base models list to store
-      self$base_models = vector("list", length = M + 1)
+      self$base_models = vector("list", length = M)
       #init f_iter predictions list to store. M+1 to include iteration 0
-      self$f_hat = vector("list", length = M + 1)
+      self$f_hat = vector("list", length = M)
       #init beta weights
-      self$beta_weights = numeric(M + 1)
+      self$beta_weights = numeric(M)
       #init trace list for matrices
-      self$trace = vector("list", length = M + 1)
+      self$trace = vector("list", length = M)
       #init line search solutions
-      self$linesearch_solutions = vector("list", length = M + 1)
+      self$linesearch_solutions = vector("list", length = M)
       if (baselearner == "treestump") {
         for (m in 1:M) {
           # Get prediction value for additive model 
@@ -76,7 +76,7 @@ GradientBoosting = R6Class("GradientBoosting",
           # Create residum data.frame to pass into rpart
           resid_data = data.frame(X = self$X, pseudo_resids = pseudo_resids)
           # Fit base model for pseuo-rediduals
-          self$base_models[[m]] = rpart(pseudo_resids ~ ., data = resid_data, control = rpart.control(maxdepth = 1))
+          self$base_models[[m]] = rpart(pseudo_resids ~ X, data = resid_data, control = rpart.control(maxdepth = 1))
           # Predict current base learner
           base_pred_hat = predict(obj = self$base_models[[m]], newdata = resid_data)
           # Get optimal beta for m-th iteration
@@ -100,6 +100,7 @@ GradientBoosting = R6Class("GradientBoosting",
          preds_base_models = sapply(1:m, function(b) {
           predict(obj = self$base_models[[b]], newdata = self$data)
         })
+         # for the prediction take prediction for each base model and multiply it with their corresponding beta weight and add f_0 model 
          preds_base_models = preds_base_models %*% self$beta_weights[1:m] + self$f_hat[[1]]
       }
     },
@@ -113,12 +114,12 @@ GradientBoosting = R6Class("GradientBoosting",
     #' Line search: Computes the optimal m-th beta for gradient descent solving univariate problem
     #' @param y_hat true target vector 
     #' @param f_xi predicted target vector
-    #' @param j current gradient boostigng algorithm (m-1)
+    #' @param j current gradient boostigng algorithm iteration (m-1)
     #' @return optimal beta weight for base learner m.
     line_search = function(y_hat, base_pred_hat, j) {
       # L2 loss : (y, f_m) = sum_i (y_i - (f_{m-1} + beta * f_m))^2
       obj = function(beta) {
-        L2_inner_sum = t(self$y - (y_hat + self$beta_weights * base_pred_hat)) %*% (self$y - (y_hat + self$beta_weights * base_pred_hat))
+        L2_inner_sum = t(self$y - (y_hat + beta * base_pred_hat)) %*% (self$y - (y_hat + beta * base_pred_hat))
         return(L2_inner_sum)
       }
       # find best beta
@@ -139,4 +140,4 @@ data = data.frame(X = X, y = y)
 myGradientBoosting = GradientBoosting$new(data = data, target = "y")
 myGradientBoosting
 myGradientBoosting$train(baselearner = "treestump", M = 50L)
-
+myGradientBoosting$beta_weights
