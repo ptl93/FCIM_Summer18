@@ -25,7 +25,6 @@ GradientBoosting = R6Class("GradientBoosting",
     trace = NULL,
     linesearch_solutions = NULL,
     formula = NULL,
-    f_0 = NULL,
     ### CONSTRUCTOR ###
     #' Initializes Adaboost object
     #' @param data data.frame
@@ -82,8 +81,7 @@ GradientBoosting = R6Class("GradientBoosting",
           # Get optimal beta for m-th iteration
           self$beta_weights[m] = self$line_search(y_hat = self$f_hat[[m]], base_pred_hat = base_pred_hat, j = m)
           # Trace 
-          #trace[[m]] = data.frame(X = self$X, y = self$y, y_hat = self$f_hat[[m]],
-          #  pseudo_resids = pseudo_resids, base_pred_hat = base_pred_hat)
+          self$trace[[m]] = data.frame(X = self$X, y = self$y, y_hat = self$f_hat[[m]], pseudo_resids = pseudo_resids, base_pred_hat = base_pred_hat)
         }
       }
     return(invisible(NULL))
@@ -100,8 +98,13 @@ GradientBoosting = R6Class("GradientBoosting",
          preds_base_models = sapply(1:m, function(b) {
           predict(obj = self$base_models[[b]], newdata = self$data)
         })
+         #print("preds_base_models")
+         #print(preds_base_models) #returns matrix n x (m-1) prediction for each base learner in cols
+         #print(dim(preds_base_models))
          # for the prediction take prediction for each base model and multiply it with their corresponding beta weight and add f_0 model 
-         preds_base_models = preds_base_models %*% self$beta_weights[1:m] + self$f_hat[[1]]
+         preds_base_models = preds_base_models %*% self$beta_weights[1:m] + self$f_hat[[1]] ##returns aggregated sum of base learners
+         #print("foo")
+         #print(preds_base_models)
       }
     },
     #' Computes the negative derivative of L2-loss function: vectorized version
@@ -125,6 +128,32 @@ GradientBoosting = R6Class("GradientBoosting",
       # find best beta
       self$linesearch_solutions[[j]] = optimize(obj, interval = c(0, 10000))
       return(self$linesearch_solutions[[j]]$minimum)
+    },
+    
+    plot_iteration_model = function(model, y_hat, pseudo_resids, base_pred_hat, beta_weight) {
+      # 2 rows 1 col
+      par(mfrow = c(2, 1))
+      # x - y plot scatter plot
+      plot(x = self$X, y = self$y, main = sprintf("data and first %i additive models", model),
+        xlab = "X", ylab = "y")
+      # plot additive model into it
+      lines(self$X, y_hat)
+      # x - pseudo resid plot
+      plot(x = self$X, y = pseudo_resids, main =
+          sprintf("pseudo-residuals r and rhat-fit of current model\nAfterwards we will find beta = %g", beta_weight),
+        xlab = "X", ylab = "pseudo residual (loss)")
+      # add predicted resids line into plot
+      lines(self$X, base_pred_hat)
+      #change normal settings again for next iter
+      par(mfrow = c(1, 1))
+    },
+    visualize_train = function() {
+      for (iter in seq.int(length(self$trace))) {
+        self$plot_iteration_model(model = iter - 1, y_hat = self$trace[[iter]]$y_hat,
+          pseudo_resids = self$trace[[iter]]$pseudo_resids, base_pred_hat = self$trace[[iter]]$base_pred_hat,
+          beta_weight = self$beta_weights[iter])
+        Sys.sleep(1)
+      }
     }
   )
 )
@@ -133,7 +162,7 @@ GradientBoosting = R6Class("GradientBoosting",
 
 set.seed(9)
 X = seq(from = 0, to = 6, by = 0.1)
-y = sin(x) + rnorm(n = length(X), mean = 0, sd = 0.10)
+y = sin(X) + rnorm(n = length(X), mean = 0, sd = 0.10)
 data = data.frame(X = X, y = y)
 #plot(x, y, type = "p", xlab = "x", ylab = "sin(x) + N(0, 0.10)")
 
@@ -141,3 +170,6 @@ myGradientBoosting = GradientBoosting$new(data = data, target = "y")
 myGradientBoosting
 myGradientBoosting$train(baselearner = "treestump", M = 50L)
 myGradientBoosting$beta_weights
+myGradientBoosting$visualize_train()
+
+#END
