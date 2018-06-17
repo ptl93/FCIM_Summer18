@@ -29,7 +29,7 @@ class Softmax(object):
     
     Attributes
     ---------
-    theta : 1p-array
+    theta : shape.(p-g) coefficient matrix
         Weights after fitting.
     eta: float
         Learning rate
@@ -86,8 +86,6 @@ class Softmax(object):
     ###Computed posterior probabilites for each observation and class (vectorized)###
     def calc_posterior_prob(self, X, theta): 
         M = self.weighted_sum(X=X, theta=theta)
-       # print("foo calc_posterior_prob")
-       # print(M)
         posterior_probs = self.softmax_trafo(M=M)
         return posterior_probs 
     
@@ -121,21 +119,17 @@ class Softmax(object):
         self.max_iter = max_iter
         self.objective = 10000
         if optimizer == "gd":
-            #print("yes")
             onehot = self.one_hot_encoding(self.y)
             
             for i in np.arange(max_iter):
-               # print(i)
                 grad = self.gradient(X = self.X, theta = self.theta, onehot=onehot)
-               # print(grad)
                 #apply gradient update
                 self.theta = self.theta - (self.eta) * grad 
-                #print(self.theta)
                 #compute objective value with updated theta weights
                 self.objective = self.get_objective(X=self.X, y=self.y, theta=self.theta)
                 print("Gradient Iteration: ", i)
                 print("Objective Value: ", self.objective)
-                #reference category is last col
+                #reference category is last col, hence subtract.
                 self.theta = self.theta - np.reshape(self.theta[:,(self.g-1)], newshape=(self.p,1))
             return {"theta": self.theta, "objective": self.objective}
 
@@ -147,4 +141,3 @@ softmax = Softmax(X_train, y_train)
 print(softmax.theta)
 
 softmax.train()
-#TypeError: weighted_sum() takes 2 positional arguments but 3 were given
