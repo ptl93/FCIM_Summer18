@@ -16,7 +16,7 @@ iris = datasets.load_iris()
 iris_features = iris.data
 iris_target = iris.target
 
-#Define Perceptron class:
+#Define Softmax class obect:
 class Softmax(object):
     """
     Softmax Classifier.
@@ -53,11 +53,11 @@ class Softmax(object):
         -------
         Softmax object : a softmax object for classification
         '''
-        self.X = X
-        self.y = y
         if add_intercept:
             intercept = np.ones((X.shape[0], 1))
             X = np.hstack((intercept, X))
+        self.X = X
+        self.y = y
         self.n = X.shape[0]
         self.p = X.shape[1]
         self.g = len(np.unique(y))
@@ -68,24 +68,27 @@ class Softmax(object):
     ### Methods: ###
     
     ###Softmax vectorized score###
-    def softmax_vec(z):
-        z = np.max(z) - z
+    def softmax_vec(self, z):
+        z = z - np.max(z)
         return np.exp(z)/np.sum(np.exp(z))
         
     def softmax_trafo(self, M):
         #init activated scores
         out_mat = np.zeros(shape=(M.shape[0], self.g)) 
         for i in np.arange(M.shape[0]):
-            out_mat[i,:] = np.dot(M[i,:], self.theta)
+            out_mat[i,:] = self.softmax_vec(M[i,:])
         return out_mat
         
     ###Weighted (linear) classifier sum###
-    def weighted_sum(X, theta):
+    def weighted_sum(self, X, theta):
         return np.dot(X, theta)
         
     ###Computed posterior probabilites for each observation and class (vectorized)###
     def calc_posterior_prob(self, X, theta): 
-        posterior_probs = self.softmax_trafo(self.weighted_sum(X, theta))
+        M = self.weighted_sum(X=X, theta=theta)
+       # print("foo calc_posterior_prob")
+       # print(M)
+        posterior_probs = self.softmax_trafo(M=M)
         return posterior_probs 
     
     def one_hot_encoding(self, y):
@@ -95,7 +98,7 @@ class Softmax(object):
         return hot_encoded_mat
     
     def get_objective(self, X, y, theta):
-        probs_mat = self.calc_posterior_prob(X, theta)
+        probs_mat = self.calc_posterior_prob(X=X, theta=theta)
         prob_vals = np.zeros(shape=probs_mat.shape[0])
         for i in np.arange(probs_mat.shape[0]):
             prob_vals[i] = probs_mat[i, y[i]]
@@ -107,7 +110,8 @@ class Softmax(object):
          grad = np.zeros(shape=(theta.shape[0], theta.shape[1]))
          for i in np.arange(X.shape[0]):
              xj = X[i,]  
-             gradient = -np.cross(diff[i,:], xj)  
+             #fix bug for computing gradient matrix. [g,p] shape
+             gradient = -np.outer(diff[i,:], xj)  
              grad = grad + gradient.T
          return grad
     
@@ -116,18 +120,23 @@ class Softmax(object):
         self.optimizer = optimizer
         self.max_iter = max_iter
         self.objective = 10000
-        True
         if optimizer == "gd":
+            #print("yes")
             onehot = self.one_hot_encoding(self.y)
+            
             for i in np.arange(max_iter):
-                grad = self.gradient(self.X, self.theta, onehot)
+               # print(i)
+                grad = self.gradient(X = self.X, theta = self.theta, onehot=onehot)
+               # print(grad)
                 #apply gradient update
                 self.theta = self.theta - (self.eta) * grad 
+                #print(self.theta)
                 #compute objective value with updated theta weights
-                self.objective = self.get_objective(self.X, self.y, self.theta)
+                self.objective = self.get_objective(X=self.X, y=self.y, theta=self.theta)
                 print("Gradient Iteration: ", i)
                 print("Objective Value: ", self.objective)
-                self.theta = self.theta - self.theta[:,self.g]
+                #reference category is last col
+                self.theta = self.theta - np.reshape(self.theta[:,(self.g-1)], newshape=(self.p,1))
             return {"theta": self.theta, "objective": self.objective}
 
 ## Conduct Softmax Regression
