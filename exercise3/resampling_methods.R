@@ -27,13 +27,24 @@ holdout_sampling = function(X, y, train_size = 2/3){
 k_fold_cv = function(X, y , k = 5) {
   #get 5 buckets for 1:n
   sampled_idx = sample(1:nrow(X), replace = FALSE, size = nrow(X))
-  chunks = matrix(sampled_idx, ncol = k) #work with matrix as its easier to access
-  #chunks = split(chunks, rep(1:k, each = nrow(chunks)))
+  byf = rep(1:k, each = k)
+  #take care if n is not integer-dividable with k 
+  ## Helper
+  is.wholenumber = function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
+  if (!is.wholenumber(nrow(X)/k)) {
+    byf = byf[-length(byf)]
+  }
+  chunks = split(sampled_idx, f = byf)
+
   outlist = lapply(1:k, function(i) {
-    test_indice = chunks[,i]
-    train_indice = c(chunks[,setdiff(1:k, i)])
-    foo = list(train = list(X_train = X[train_indice, ], y_train = y[train_indice]),
+    test_indice = chunks[[i]]
+    train_indice = sapply(X = setdiff(1:k, i), function(c) {
+      chunks[[c]]
+    }, simplify = TRUE)
+    train_indice = unlist(train_indice)
+    cv_iter = list(train = list(X_train = X[train_indice, ], y_train = y[train_indice]),
       test = list(X_test = X[test_indice,], y_test = y[test_indice]))
+    return(cv_iter)
   })
   names(outlist) = paste("Fold", 1:k)
   return(outlist)
@@ -77,7 +88,8 @@ X = iris[,-5]
 y = iris[, 5]
 
 iris_holdout = holdout_sampling(X, y)
-iris_CV = k_fold_cv(X,y)
+iris_CV4 = k_fold_cv(X,y, k = 4)
+iris_CV5 = k_fold_cv(X,y, k = 5)
 iris_boostrap = bootstrap_sampling(X,y)
 iris_subsampling = subsampling(X,y)
 
