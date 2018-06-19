@@ -25,8 +25,15 @@ holdout_sampling = function(X, y, train_size = 2/3){
 #' @return [list(k)] nested list containing each cross validation iteration folds : list(X_train, y_train,) list(X_test, y_test)
 #' 
 k_fold_cv = function(X, y , k = 5) {
-  outlist = lapply(1:k, function(f) {
-    holdout_sampling(X = X, y = y, train_size = (nrow(X) - nrow(X)/k))
+  #get 5 buckets for 1:n
+  sampled_idx = sample(1:nrow(X), replace = FALSE, size = nrow(X))
+  chunks = matrix(sampled_idx, ncol = k) #work with matrix as its easier to access
+  #chunks = split(chunks, rep(1:k, each = nrow(chunks)))
+  outlist = lapply(1:k, function(i) {
+    test_indice = chunks[,i]
+    train_indice = c(chunks[,setdiff(1:k, i)])
+    foo = list(train = list(X_train = X[train_indice, ], y_train = y[train_indice]),
+      test = list(X_test = X[test_indice,], y_test = y[test_indice]))
   })
   names(outlist) = paste("Fold", 1:k)
   return(outlist)
@@ -52,10 +59,10 @@ bootstrap_sampling = function(X, y , B = 50) {
 #' @param X [matrix(n,p)] or [data.frame(n,p)] Feature input data 
 #' @param y [numeric(n)] or [factor(n)] Target input data
 #' @param B [integer(1)] number of Subsampling iterations. Default is B = 50
-#' @param train_size [numeric(1)] train_size fraction. Default is 2/3. Leading to ceiling(train_size*2/3)
+#' @param train_size [numeric(1)] train_size fraction. Default is 0.8. Leading to ceiling(train_size*0.8)
 #' @return [list(k)] nested list containing each Subsampling iteration Train and Test Data : list(X_train, y_train,) list(X_test, y_test)
 #' 
-subsampling = function(X, y , B = 50, train_size = 2/3) {
+subsampling = function(X, y , B = 50, train_size = 0.8) {
   outlist = lapply(1:B, function(b) {
     train_idx = sample(1:nrow(X), size = nrow(X), replace = TRUE)
     test_idx = setdiff(1:nrow(X), train_idx)
