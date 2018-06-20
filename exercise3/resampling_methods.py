@@ -15,7 +15,7 @@ import numpy as np
 from numpy.random import choice
 import pandas as pd
 from math import ceil
-
+import itertools
 
 def holdout_sampling(X, y, train_size = 2/3):
     '''
@@ -58,11 +58,24 @@ def k_fold_cv(X, y, k = 5):
     '''
     n,p = X.shape
     sampled_idx = choice(np.arange(n), size=n, replace=False)
-    ## TODO use split idea https://docs.scipy.org/doc/numpy/reference/generated/numpy.split.html
+    byf = np.repeat(np.arange(0,(k)), repeats = k*k)
+    if not (n/k).is_integer():
+        byf = byf[:-1]
+        
+    #helper:
+    def split(x, byf):
+        count = max(byf) + 1
+        return list( list(itertools.compress(x, (el == i for el in byf))) for i in range(count) )
+    #define chunks
+    chunks = split(sampled_idx, byf)
     #Init empty dictionary with named keys via list comprehension
     k_fold_out = dict.fromkeys([i for i in range(1,k+1)])
+    j = 0
     for key in k_fold_out.keys():
-        k_fold_out[key] = 'foo as of now'
+        test_indices = np.sort(np.array(chunks[j]))
+        train_indices = np.setdiff1d(np.arange(n), test_indices)
+        k_fold_out[key] = {'train': [X[train_indices,:], y[train_indices]], 'test': [X[test_indices,:], y[test_indices]]}
+        j += 1
         
     return k_fold_out
 
@@ -115,4 +128,6 @@ iris = load_iris()
 X = iris.data
 y = iris.target
 iris_holdout = holdout_sampling(X,y)
+iris_bootstrap = bootstrap_sampling(X,y)
+iris_subsampling = subsampling(X,y)
 iris_cv = k_fold_cv(X,y)
