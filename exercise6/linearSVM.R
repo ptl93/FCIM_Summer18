@@ -19,6 +19,7 @@ linearSVM = R6Class("linearSVM",
     weights = NULL,
     max_iter = NULL,
     loss_history = NULL,
+    optim_sol = NULL,
     ### CONSTRUCTOR ###
     #' Initializes linearSVM object
     #' @param data data.frame
@@ -56,19 +57,31 @@ linearSVM = R6Class("linearSVM",
       subgradient = weights + self$n * C * self$deriv_hinge(x_i = x_i, y_i = y_i, weights = weights)
       return(subgradient)
     },
-    train = function(max_iter, C = 1, lr = 0.01, optim_method = FALSE) {
+    train = function(max_iter, C = 1, lr = 0.01, optim_method = FALSE, b = 0) {
       self$loss_history = numeric(max_iter)
-      for (t in seq.int(max_iter)) {
-        self$loss_history[t] = self$total_loss(X = self$X, weights = self$weights, y = self$y, C = C)
-        messagef("Iteration: %i, Empirical risk: %f", t, self$loss_history[t])
-        if (optim_method) {
-          ## ToDO use optim method for parameter search
-        } else {
+      if (optim_method) {
+        sum_loss = function(w, b = 0) { 
+          z = (self$X %*% w + b) * self$Y
+          L = sum(self$hinge_loss(z))
+          objective_func = 0.5 * sum(w^2)
+          return(objective_func + C * L)
+        } 
+        optim_func = function(x) sum_loss(w = self$weights)
+        # using neldermead is EXTRMELY stupid here. but who cares....
+        res = optim(par = self$weights, fn = optim_func, method = "Nelder-Mead",
+          control = list(maxit = max_iter))
+        par = res$par
+        self$optim_sol = list(w = par, obj = res$val)
+        print(self$optim_sol)
+      } else {# Use stochstic sub gradient algorithm
+        for (t in seq.int(max_iter)) {
+          self$loss_history[t] = self$total_loss(X = self$X, weights = self$weights, y = self$y, C = C)
+          messagef("Iteration: %i, Empirical risk: %f", t, self$loss_history[t])
           i = sample(seq.int(self$n), size = 1)
           self$weights = self$weights - lr*self$subgradient_loss(x_i = self$X[i,], weights = self$weights, y_i = self$y[i], C = C)
         }
-        
       }
+
       return(invisible(NULL))
     }
   )
@@ -92,5 +105,20 @@ fact_data$classes = as.factor(fact_data$classes)
 ggplot(fact_data, aes(x = x.1, y = x.2, color = classes)) + geom_point(shape = 1)
 
 mylinSVM = linearSVM$new(data = data, target = target)
+## Use stochastic sub gradient
 mylinSVM$train(max_iter = 5*nrow(data))
-## somehow diverges bc stochastic subgradient?
+mylinSVM$weights
+#x.1       x.2 
+#-0.025108  3.932424 
+#Iteration: 500, Empirical risk: 30.682358
+## Emprical risk diverges. goes up and down... 
+
+## Use nelder mead optim
+
+mylinSVM2 = linearSVM$new(data = data, target = target)
+mylinSVM2$train(max_iter = 5*nrow(data), optim_method = TRUE)
+#$w
+#[1]  0.5701988 -0.3248249
+
+#$obj
+#[1] 0.215319
