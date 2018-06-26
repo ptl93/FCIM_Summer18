@@ -10,6 +10,7 @@
 
 library(R6)
 library(rpart)
+library(BBmisc)
 
 GradientBoosting = R6Class("GradientBoosting",
   public = list(
@@ -25,21 +26,25 @@ GradientBoosting = R6Class("GradientBoosting",
     trace = NULL,
     linesearch_solutions = NULL,
     formula = NULL,
+    loss_history = NULL,
+    type = NULL,
+    X_colnames = NULL,
     ### CONSTRUCTOR ###
     #' Initializes Adaboost object
     #' @param data data.frame
     #' @param target
     #' @param add_intercept logical, whether intercept should be added. Default is FALSE
     #' @param formula formula for baselearner. Default is null. If null is inserted full model target ~ . will be taken
+    #' @param type character string either "regression" or "binary_classification"
     #' @return GradientBoost object
-    initialize = function(data, target, add_intercept = FALSE, formula = NULL) {
+    initialize = function(data, target, add_intercept = FALSE, formula = NULL, type) {
       if (add_intercept) {
         data = cbind(intercept = 1, data)
         self$add_intercept = TRUE
       } 
+      self$X_colnames = setdiff(colnames(data), target)
       self$X = data[, -which(names(data) == target)]
       self$y = data[[target]]
-      if (!is.numeric(self$y)) stop("Target variable is not numeric. Current version only supports regression task.")
       self$data = data
       self$n = nrow(data)
       self$p = ncol(data) - 1
@@ -48,14 +53,32 @@ GradientBoosting = R6Class("GradientBoosting",
       } else {
         self$formula = formula
       }
+      self$type = type
     },
     ### METHODS ###
+    #' Computes L2 loss (for regression)
+    L2_loss = function(y, f_x) {
+      sum((y - f_x)^2)
+    },
+    #' Computes exponential loss (for binary classification)
+    exponential_loss = function(y, f_x) {
+      sum(-y*f_x + log(1 +  exp(f_x)))
+    },
+    #' Computes sigmoid function 
+    sigmoid = function(x) {
+      1 / (1 + exp(x))
+    },
+    #' Computes the negative derivative of the exponential loss function
+    exponential_deriv = function(y, f_x) {
+      y - self$sigmoid(f_x) 
+    },
     #' Trains GradientBoosting object
     #' @param baselearner weak baselearner used for GradientBoosting Default is a tree strump with max.depth=1 from rpart
     #' @param M maximal iteration for GradientBoosting
+    #' @param nu shrinkage / learning rate for regularization
     #' @param ... additional parameters passed to baselearner algorithm
     #' @return NULL
-    train = function(baselearner = "treestump", M = 30L, ...) {
+    train = function(baselearner = "treestump", M = 30L, nu = 0.1, ...) {
       #init base models list to store
       self$base_models = vector("list", length = M)
       #init f_iter predictions list to store. M+1 to include iteration 0
@@ -66,16 +89,30 @@ GradientBoosting = R6Class("GradientBoosting",
       self$trace = vector("list", length = M)
       #init line search solutions
       self$linesearch_solutions = vector("list", length = M)
+      #init loss history vector
+      self$loss_history = numeric(M)
       if (baselearner == "treestump") {
         for (m in 1:M) {
           # Get prediction value for additive model 
-          self$f_hat[[m]] = self$additive_model_pred(m - 1)
-          # Compute residuals for every observation. Residuals are negative gradient of loss from additive model
-          pseudo_resids = self$L2_deriv(self$y, self$f_hat[[m]])
+          self$f_hat[[m]] = self$additive_model_pred(m = m - 1, nu = nu)
+          if (self$type == "regression") {
+            self$loss_history[m] = self$L2_loss(y = self$y, f_x = self$f_hat[[m]])
+            # Compute residuals for every observation. Residuals are negative gradient of loss from additive model
+            pseudo_resids = self$L2_deriv(self$y, self$f_hat[[m]])
+          } else if (self$type == "binary_classification") {
+            self$loss_history[m] = self$exponential_loss(y = self$y, f_x = self$f_hat[[m]])
+            # Compute residuals for every observation. Residuals are negative gradient of loss from additive model
+            pseudo_resids = self$exponential_deriv(self$y, self$f_hat[[m]])
+            #print(pseudo_resids)
+          }
+          print(paste("Empirical Risk at iteration:", m, "has value:", self$loss_history[m]))
           # Create residum data.frame to pass into rpart
-          resid_data = data.frame(X = self$X, pseudo_resids = pseudo_resids)
+          #resid_data = data.frame(X = self$X, pseudo_resids = pseudo_resids)
+          resid_data = cbind(self$X, pseudo_resids)
+          resid_data = as.data.frame(resid_data)
+          colnames(resid_data) = c(self$X_colnames, "pseudo_resids")
           # Fit base model for pseuo-rediduals
-          self$base_models[[m]] = rpart(pseudo_resids ~ X, data = resid_data, control = rpart.control(maxdepth = 1))
+          self$base_models[[m]] = rpart(pseudo_resids ~ ., data = resid_data, maxdepth = 1, ...)
           # Predict current base learner
           base_pred_hat = predict(obj = self$base_models[[m]], newdata = resid_data)
           # Get optimal beta for m-th iteration
@@ -88,11 +125,17 @@ GradientBoosting = R6Class("GradientBoosting",
     },
     #' Computes the prediction of the additive model f_hat_{m-1}
     #' @param m current iteration 0,1,..,M
+    #' @param nu shrinkage parameter for regularization
     #' @return prediction of the additive model f_hat_{m-1} including all base learner models unti m-1 on data X 
-    additive_model_pred = function(m) {
+    additive_model_pred = function(m, nu) {
       ## Init: For the first gradient boosting prediction as predicted value use the mean of target variable
       if (m == 0) {
-        return(rep(mean(self$y), self$n))
+        if (self$type == "regression") {
+          first_pred = rep(mean(self$y), self$n)
+        } else if (self$type == "binary_classification") {
+          first_pred = sample(c(0,1), size = self$n, replace = TRUE, prob = c(0.5,0.5))
+        }
+        return(first_pred)
       } else {# If not initialization take all (m-1) base learners in consideration for f_hat:
         # Take (m-1) predictions for each base learner, multiply it with the base learner weights beta and then sum up
          preds_base_models = sapply(1:m, function(b) {
@@ -102,9 +145,10 @@ GradientBoosting = R6Class("GradientBoosting",
          #print(preds_base_models) #returns matrix n x (m-1) prediction for each base learner in cols
          #print(dim(preds_base_models))
          # for the prediction take prediction for each base model and multiply it with their corresponding beta weight and add f_0 model 
-         preds_base_models = preds_base_models %*% self$beta_weights[1:m] + self$f_hat[[1]] ##returns aggregated sum of base learners
+         preds_base_models = preds_base_models %*% (nu * self$beta_weights[1:m]) + self$f_hat[[1]] ##returns aggregated sum of base learners
          #print("foo")
          #print(preds_base_models)
+         return(preds_base_models)
       }
     },
     #' Computes the negative derivative of L2-loss function: vectorized version
@@ -148,12 +192,17 @@ GradientBoosting = R6Class("GradientBoosting",
       par(mfrow = c(1, 1))
     },
     visualize_train = function() {
-      for (iter in seq.int(length(self$trace))) {
-        self$plot_iteration_model(model = iter - 1, y_hat = self$trace[[iter]]$y_hat,
-          pseudo_resids = self$trace[[iter]]$pseudo_resids, base_pred_hat = self$trace[[iter]]$base_pred_hat,
-          beta_weight = self$beta_weights[iter])
-        Sys.sleep(1)
+      if (self$type == "regression") {
+        for (iter in seq.int(length(self$trace))) {
+          self$plot_iteration_model(model = iter - 1, y_hat = self$trace[[iter]]$y_hat,
+            pseudo_resids = self$trace[[iter]]$pseudo_resids, base_pred_hat = self$trace[[iter]]$base_pred_hat,
+            beta_weight = self$beta_weights[iter])
+          Sys.sleep(1)
+        }
+      } else {
+        stop("Task problem is not a regression type")
       }
+
     }
   )
 )
@@ -166,10 +215,22 @@ y = sin(X) + rnorm(n = length(X), mean = 0, sd = 0.10)
 data = data.frame(X = X, y = y)
 #plot(x, y, type = "p", xlab = "x", ylab = "sin(x) + N(0, 0.10)")
 
-myGradientBoosting = GradientBoosting$new(data = data, target = "y")
+myGradientBoosting = GradientBoosting$new(data = data, target = "y", type = "regression")
 myGradientBoosting
-myGradientBoosting$train(baselearner = "treestump", M = 50L)
+myGradientBoosting$train(baselearner = "treestump", M = 100L,  nu = 0.2, cp = 0.2)
 myGradientBoosting$beta_weights
 myGradientBoosting$visualize_train()
+
+
+### Try out binary classification:
+library(mlbench)
+data(BreastCancer)
+BreastCancer$Class = ifelse(BreastCancer$Class == "malignant", 0, 1)
+BreastCancer = BreastCancer[, 2:ncol(BreastCancer)]
+myGradientBoosting_classif = GradientBoosting$new(data = BreastCancer, target = "Class", type = "binary_classification")
+myGradientBoosting_classif
+myGradientBoosting_classif$train(baselearner = "treestump", M = 100L, nu = 0.2, minsplit = 50)
+
+### very very slow convergence. Need enhancement in maxdepth, then not a treestump anymore.
 
 #END
