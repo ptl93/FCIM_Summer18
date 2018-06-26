@@ -5,7 +5,9 @@
 ## Settings: 
 # - can handle Regression task
 # - use L2-loss
-# - use decision stumps (trees of depth one) as base learner
+# - can handle Binary Classification task
+# - use exponential loss
+# - use decision stumps (trees of depth one) as base learner with additional params in rpart into self$train() func
 # - use linesearch to find the optimal "step size"
 
 library(R6)
