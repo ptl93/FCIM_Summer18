@@ -46,18 +46,14 @@ linearSVM = R6Class("linearSVM",
       return(empirical_risk)
     },
     deriv_hinge = function(x_i, y_i, weights) {
-      if (y_i * t(x_i) %*% weights < 1) {
-        dw = -y_i*x_i
-      } else {
-        dw = 0
-      }
+      dw = ifelse(y_i * x_i %*% weights < 1, -y_i*x_i, 0)
       return(dw)
     },
     subgradient_loss = function(x_i, weights, y_i, C)  {
       subgradient = weights + self$n * C * self$deriv_hinge(x_i = x_i, y_i = y_i, weights = weights)
       return(subgradient)
     },
-    train = function(max_iter, C = 1, lr = 0.01, optim_method = FALSE, b = 0) {
+    train = function(max_iter, C = 1, lr = NULL, optim_method = FALSE, b = 0, batch_size = NULL) {
       self$loss_history = numeric(max_iter)
       if (optim_method) {
         sum_loss = function(w, b = 0) { 
@@ -67,7 +63,6 @@ linearSVM = R6Class("linearSVM",
           return(objective_func + C * L)
         } 
         optim_func = function(x) sum_loss(w = self$weights)
-        # using neldermead is EXTRMELY stupid here. but who cares....
         res = optim(par = self$weights, fn = optim_func, method = "Nelder-Mead",
           control = list(maxit = max_iter))
         par = res$par
@@ -77,8 +72,22 @@ linearSVM = R6Class("linearSVM",
         for (t in seq.int(max_iter)) {
           self$loss_history[t] = self$total_loss(X = self$X, weights = self$weights, y = self$y, C = C)
           messagef("Iteration: %i, Empirical risk: %f", t, self$loss_history[t])
-          i = sample(seq.int(self$n), size = 1)
-          self$weights = self$weights - lr*self$subgradient_loss(x_i = self$X[i,], weights = self$weights, y_i = self$y[i], C = C)
+          ## Enhance minibatch.  If no batch_size is inserted by default take bootstrap sample 25% of n_train
+          if (is.null(batch_size)) batch_size = ceiling(0.25*self$n)
+          mini_batch_idx = sample(x = 1:self$n, size = batch_size, replace = TRUE)
+          ## Get subgradient:
+          sub_grad = mean(self$subgradient_loss(x_i = self$X[mini_batch_idx,], weights = self$weights, y_i = self$y[mini_batch_idx], C = C))
+          if (is.null(lr)) {
+            ## Enhance line search:
+            obj = function(adapt_lr) {
+              tmp_weights = self$weights - adapt_lr*sum(self$subgradient_loss(x_i = self$X[mini_batch_idx,], weights = self$weights, y_i = self$y[mini_batch_idx], C = C))
+              my_obj = self$total_loss(X = self$X, weights = tmp_weights, y = self$y, C)
+              return(my_obj)
+            }
+            lr = optimize(obj, interval = c(0, 10000))$minimum
+          }
+          #adjust weights
+          self$weights = self$weights - lr * sub_grad
         }
       }
 
@@ -106,19 +115,21 @@ ggplot(fact_data, aes(x = x.1, y = x.2, color = classes)) + geom_point(shape = 1
 
 mylinSVM = linearSVM$new(data = data, target = target)
 ## Use stochastic sub gradient
-mylinSVM$train(max_iter = 5*nrow(data))
+mylinSVM$train(max_iter = 500, lr = NULL, batch_size = 20)
 mylinSVM$weights
-#x.1       x.2 
-#-0.025108  3.932424 
-#Iteration: 500, Empirical risk: 30.682358
-## Emprical risk diverges. goes up and down... 
+#[1] 0.6463704 1.4744407
+## Get minimal empirical risk in loss_history:
+min(mylinSVM$loss_history)
+#[1] 11.02897
+## Get iteration index for minimal empirical risk:
+which.min(mylinSVM$loss_history)
+#[1] 31
 
 ## Use nelder mead optim
-
 mylinSVM2 = linearSVM$new(data = data, target = target)
 mylinSVM2$train(max_iter = 5*nrow(data), optim_method = TRUE)
 #$w
-#[1]  0.5701988 -0.3248249
+#[1] 0.7863688 0.9038573
 
 #$obj
-#[1] 0.215319
+#[1] 0.7176669
