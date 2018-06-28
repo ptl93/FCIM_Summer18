@@ -57,7 +57,7 @@ linearSVM = R6Class("linearSVM",
       self$loss_history = numeric(max_iter)
       if (optim_method) {
         sum_loss = function(w, b = 0) { 
-          z = (self$X %*% w + b) * self$Y
+          z = (self$X %*% w + b) * self$y
           L = sum(self$hinge_loss(z))
           objective_func = 0.5 * sum(w^2)
           return(objective_func + C * L)
