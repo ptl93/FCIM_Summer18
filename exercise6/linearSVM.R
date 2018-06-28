@@ -132,4 +132,4 @@ mylinSVM2$train(max_iter = 5*nrow(data), optim_method = TRUE)
 #[1] 0.7863688 0.9038573
 
 #$obj
-#[1] 0.7176669
+#[1] 9.591916
