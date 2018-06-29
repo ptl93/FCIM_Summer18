@@ -53,7 +53,7 @@ Adaboost = R6Class("Adaboost",
     #' @param baselearner weak baselearner used for Adaboost. Default is a tree strump with max.depth=1 from rpart
     #' @param max_iter maximal iteration for Adaboost
     #' @param ... additional parameters passed to baselearner algorithm
-    train = function(baselearner = "treestrump", max_iter = 30L, ...) {
+    train = function(baselearner = "treestrump", max_iter = 30L, trace = FALSE, ...) {
       self$base_models = vector("list", length = max_iter)
       self$base_preds = vector("list", length = max_iter)
       self$beta_weights = numeric(length = max_iter)
@@ -80,11 +80,21 @@ Adaboost = R6Class("Adaboost",
           #update weights
           self$weights = self$weights*exp(self$beta_weights[[iter]]*self$get_missclassified_idx(y = self$base_models[[iter]]$y,
             y_hat = self$base_preds[[iter]]))
-          
           #normalize weights
           self$weights = self$weights / sum(self$weights)
+          
+          #include training trace with class pred function
+          if (trace && iter > 2) {
+            #prepare dataset for weights
+            newdata = as.data.frame(data)
+            self$add_intercept = FALSE
+            pred = self$predict(newdata = newdata)
+            mmce_iter = mean(pred != as.numeric(newdata$Class))
+            cat(sprintf("err is %s, alpha is %s \n", mmce_iter, self$beta_weights[iter]))
+          }
         }
       }
+      self$add_intercept = TRUE
       #save max_iter in object for prediction
       self$max_iter = max_iter
       return(invisible(NULL))
@@ -153,7 +163,7 @@ Adaboost = R6Class("Adaboost",
 data(BreastCancer, package = "mlbench")
 library(dplyr)
 myAdaboost = Adaboost$new(data = BreastCancer[,-1], target = "Class", add_intercept = TRUE)
-myAdaboost$train(baselearner = "treestump", max_iter = 50L)
+myAdaboost$train(baselearner = "treestump", max_iter = 50L, trace = TRUE)
 myAdaboost$beta_weights
 preds = myAdaboost$predict(BreastCancer)
 preds$mmce

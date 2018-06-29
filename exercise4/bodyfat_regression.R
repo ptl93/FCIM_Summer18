@@ -54,7 +54,7 @@ rpart.plot(tree_only_anthro3c)
 plotLearnerPrediction(regr_tree_learner, bodyfat_task, features = "waistcirc")
 plotLearnerPrediction(regr_tree_learner, bodyfat_task, features = "anthro3c")
 plotLearnerPrediction(regr_tree_learner, bodyfat_task, features = c("waistcirc", "anthro3c"))
-
+## --> for each rectangle we get one prediction. In this case only 5 predictions
 ### d) 10-fold-cv and calc mean_se and median_ae
 rdesc = makeResampleDesc("CV", iters = 10)
 print(rdesc)
