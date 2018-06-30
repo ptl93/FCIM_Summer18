@@ -11,4 +11,4 @@ Following List refers to the implemented solutions:
 * [Adaboost - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/exercise4/adaboost.R)
 * [Gradient Boosting - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/exercise5/GradientBoosting.R)
 * [Linear SVM - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/exercise6/linearSVM.R)
-* [Perceptron - Python version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/perceptron.ipynb)
+* [Perceptron - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/perceptron.R),  [Perceptron - Python version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/perceptron.ipynb)
