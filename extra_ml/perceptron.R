@@ -35,23 +35,36 @@ Perceptron = R6Class("Perceptron", public = list(
     Y_hat = sign(weighted_sum)
     for (i in seq.int(max_iter)) {
       if (all(self$Y == Y_hat)) {
+        print(sprintf("Training stopped at iteration %i", i))
         break
       } else {
-        for (sample in seq.int(self$n)) {
+        for (sample in seq.int(self$N)) {
           if (self$Y[sample] != Y_hat[sample]) {
             # Apply weights update
-            self$weights = self$weights + self$eta * self$Y[sample] * self$X[sample, ]
+            self$weights = c(self$weights + eta * self$Y[sample] * t(self$X[sample, ]))
             # Compute new Y_hat after one weight update
-            Y_hat = sign(self$X %*% self$weights)
+            weighted_sum = self$X %*% self$weights
+            Y_hat = sign(weighted_sum)
           }
         }
       }
+      if(i == max_iter) print(sprintf("Training stopped at maximal iteration %i", i))
     }
     print(paste("Final weights after training:", paste(self$weights, collapse = ",")))
     return(invisible(NULL))
   },
-  visualize() {
+  visualize = function() {
     #TBD
+    data_frame = cbind.data.frame(X = self$X, Y = as.factor(self$Y))
+    colnames(data_frame) = c("bias", "X1", "X2", "Y")
+    intercept = -self$weights[1]/self$weights[3] 
+    slope = -self$weights[2]/self$weights[3]
+    equation = paste0("X2 = ", round(slope, 2), "*X1 + ", round(intercept, 2))
+    require(ggplot2)
+    g_plot = ggplot(data = data_frame, mapping = aes(x = X1, y = X2, colour = Y)) + 
+      geom_point(mapping = aes(x = X1, y = X2, fill = Y)) + geom_abline(slope = slope, intercept = intercept) +
+      ggtitle(equation)
+    return(g_plot)
   }
 ))
 
@@ -73,4 +86,6 @@ Y = data$Y
 
 perceptron = Perceptron$new(X,Y)
 perceptron$train()
-
+plot = perceptron$visualize()
+print(plot)
+ggsave(filename = "perceptron_2D_R.png", plot = plot)
