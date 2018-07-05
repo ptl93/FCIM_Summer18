@@ -25,7 +25,6 @@ k_nearest_neighbors = R6Class("k_nearest_neighbors",
       self$y = y
       self$n = nrow(X)
       self$p = ncol(X)
-      self$nearest_neighbors = vector("list", length = self$n)
       # if classification problem, get number of classes
       if (is.factor(y)) {
         self$g = length(levels(y))
@@ -45,7 +44,7 @@ k_nearest_neighbors = R6Class("k_nearest_neighbors",
         y_data = self$y
       }
       self$y_pred = rep(NA, times = nrow(X_data))
-    
+      self$nearest_neighbors = vector("list", length = nrow(X_data))
       # For each observation in X(_train) compute the distance to each other observation
       for (observation in seq.int(nrow(X_data))) {
         #out: nx1 vector, because n instances in train.
@@ -111,7 +110,7 @@ knn_iris$train_knn(k = 5)
 print(knn_iris$y_pred)
 ## test
 knn_iris$predict_knn(k = 5, X_test = X_test, y_test = y_test)
-## [1] "Accuracy: 1" 
+##[1] "Accuracy: 1"
 sum(knn_iris$y_pred == y_test)/nrow(X_test)
 
 ## try regression
