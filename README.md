@@ -13,3 +13,4 @@ Following List refers to the implemented solutions:
 * [Linear SVM - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/exercise6/linearSVM.R)
 * [Perceptron - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/perceptron.R),  [Perceptron - Python version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/perceptron.ipynb)
 * [Adaline - R version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/adaline.R), [Adaline - Python version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/adaline.py)
+* [Linear Regression - Python Version](https://github.com/ptl93/MachineLearning_PredictiveModelling/blob/master/extra_ml/LinearRegression.ipynb)
